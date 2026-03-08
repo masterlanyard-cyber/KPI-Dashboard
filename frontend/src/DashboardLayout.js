@@ -2044,26 +2044,13 @@ export default function DashboardLayout() {
     : '-';
 
   const yearOptions = React.useMemo(() => {
-    const dashboardData = getDashboardData();
-    const years = new Set([String(selectedYear)]);
-    const sourceTabs = ['ActualVsTarget', 'KPIs', 'SalesByRegion', 'SalesByChannel', 'SalesGrowth', 'SalesByProduct'];
-
-    sourceTabs.forEach((tabName) => {
-      const rows = dashboardData?.[tabName]?.elements || [];
-      rows.forEach((row) => {
-        const yearValue = String(getRowValue(row, ['Year', 'YEAR', 'Tahun', 'year']) || '').trim();
-        if (/^\d{4}$/.test(yearValue)) {
-          years.add(yearValue);
-        }
-      });
-    });
-
-    if (years.size <= 1) {
-      ['2023', '2024', '2025', '2026'].forEach((year) => years.add(year));
+    const currentYear = new Date().getFullYear();
+    const last5Years = [];
+    for (let i = 4; i >= 0; i--) {
+      last5Years.push(String(currentYear - i));
     }
-
-    return [...years].sort((a, b) => Number(a) - Number(b));
-  }, [getDashboardData, selectedYear]);
+    return last5Years;
+  }, []);
 
   const periodContextText = periodMode === 'yearly'
     ? `Full Year ${selectedYear}`
@@ -2143,22 +2130,12 @@ export default function DashboardLayout() {
   return (
     <div className="dashboard-root">
       <div className="dashboard-header">
-        <div className="dashboard-title-wrap" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontWeight: 700, fontSize: 24, letterSpacing: 0.5 }}>{organizationTitle}</span>
-          <span style={{ marginLeft: 8 }}>| {periodMode === 'yearly' ? 'Annual Report' : periodMode === 'quarterly' ? 'Quarterly Report' : 'YTD Report'}</span>
-          <span className="dashboard-period-context">{periodContextText}</span>
-          <button
-            type="button"
-            className="dashboard-reset-btn"
-            style={{ background: '#fff', color: '#C50F1F', border: '1px solid #C50F1F', fontWeight: 500, padding: '4px 12px', borderRadius: 4, cursor: 'pointer', marginLeft: 12 }}
-            onClick={() => {
-              if (window.confirm('Reset data upload? Data hasil upload akan dihapus dan dashboard kembali ke data Google Sheets.')) {
-                setUploadedData(null);
-              }
-            }}
-          >
-            Reset Data Upload
-          </button>
+        <div className="dashboard-title-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
+          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: 0.5, lineHeight: 1 }}>{organizationTitle}</span>
+          <span style={{ fontSize: 13, color: '#6A6A6A', marginTop: 2, marginLeft: 0, lineHeight: 1.2, fontWeight: 500, textAlign: 'left' }}>
+            {periodMode === 'yearly' ? 'Annual Report' : periodMode === 'quarterly' ? 'Quarterly Report' : 'YTD Report'}
+          </span>
+          <span className="dashboard-period-context" style={{ fontSize: 12, color: '#8AA0BE', fontWeight: 400, marginTop: 0, marginLeft: 0, textAlign: 'left' }}>{periodContextText}</span>
         </div>
         <div className="filter-bar">
           <span>Mode</span>
@@ -2248,7 +2225,6 @@ export default function DashboardLayout() {
               <button
                 type="button"
                 className="dashboard-upload-btn dashboard-reset-btn"
-                style={{ background: '#fff', color: '#C50F1F', border: '1px solid #C50F1F', fontWeight: 500, padding: '8px 18px', borderRadius: 4, cursor: 'pointer', minWidth: 120 }}
                 onClick={() => {
                   if (window.confirm('Reset data upload? Data hasil upload akan dihapus dan dashboard kembali ke data Google Sheets.')) {
                     setUploadedData(null);
