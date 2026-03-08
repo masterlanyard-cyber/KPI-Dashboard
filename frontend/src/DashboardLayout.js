@@ -1930,7 +1930,15 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
 export default function DashboardLayout() {
-  const [uploadedData, setUploadedData] = React.useState(null);
+  // Load uploadedData from localStorage if available
+  const [uploadedData, setUploadedData] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem('uploadedData');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const { data, syncKpiNow, isSyncing, lastUpdated, validationIssues } = useGoogleSheets();
   // Make sure data is initialized before getDashboardData uses it
   // (already declared above, remove duplicate)
@@ -1958,6 +1966,15 @@ export default function DashboardLayout() {
     }
     return data;
   }, [uploadedData, data]);
+  // Save uploadedData to localStorage whenever it changes
+  React.useEffect(() => {
+    if (uploadedData && typeof uploadedData === 'object' && Object.keys(uploadedData).length > 0) {
+      localStorage.setItem('uploadedData', JSON.stringify(uploadedData));
+    } else {
+      localStorage.removeItem('uploadedData');
+    }
+  }, [uploadedData]);
+
   function handleFileUpload(e) {
     const files = e.target.files;
     const file = files && files[0];
@@ -2087,7 +2104,6 @@ export default function DashboardLayout() {
         return fromNamedColumn;
       }
     }
-
     for (const row of brandingRows) {
       const cellValues = Object.values(row || {})
         .map((value) => String(value || '').trim())
@@ -2097,14 +2113,29 @@ export default function DashboardLayout() {
         return fromAnyCell;
       }
     }
-
     return 'Sport & Wellness';
+  })();
+
+  // Ambil logo URL dari sheet Branding jika ada
+  const logoUrl = (() => {
+    for (const row of brandingRows) {
+      const url = getRowValue(row, ['LogoURL', 'logo_url', 'logo', 'Logo Url', 'Logo']);
+      if (url && /^https?:\/\//i.test(url)) {
+        return url;
+      }
+    }
+    return null;
   })();
 
   // Pass dashboardData to all panels as prop (or override useGoogleSheets in each panel if needed)
   return (
     <div className="dashboard-root">
       <div className="dashboard-header">
+        {logoUrl && (
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+            <img src={logoUrl} alt="Brand Logo" style={{ height: 44, marginRight: 16, objectFit: 'contain', maxWidth: 120 }} />
+          </div>
+        )}
         {/* Tombol upload & download dipindah ke bawah Last Sync */}
         <div className="dashboard-title-wrap">
           <span>{`${organizationTitle} | ${periodMode === 'yearly' ? 'Annual Report' : periodMode === 'quarterly' ? 'Quarterly Report' : 'YTD Report'}`}</span>
@@ -2195,6 +2226,18 @@ export default function DashboardLayout() {
                 style={{ display: 'none' }}
                 onChange={handleFileUpload}
               />
+              <button
+                type="button"
+                className="dashboard-upload-btn dashboard-reset-btn"
+                style={{ background: '#fff', color: '#C50F1F', border: '1px solid #C50F1F', fontWeight: 500, padding: '8px 18px', borderRadius: 4, cursor: 'pointer', minWidth: 120 }}
+                onClick={() => {
+                  if (window.confirm('Reset data upload? Data hasil upload akan dihapus dan dashboard kembali ke data Google Sheets.')) {
+                    setUploadedData(null);
+                  }
+                }}
+              >
+                Reset Data Upload
+              </button>
               <a
                 href="/Dashboard_template.xlsx"
                 download="Dashboard_template.xlsx"
