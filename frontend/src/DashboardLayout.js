@@ -147,12 +147,14 @@ const buildPieGradientWithGap = (rows, percentKey, colorKey = 'color') => {
   return `conic-gradient(${stops.join(', ')})`;
 };
 
-function KPIPanel({ selectedMonth, selectedQuarter, selectedYear, periodMode }) {
+function KPIPanel({ selectedMonth, selectedQuarter, selectedYear, periodMode, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading, error, lastUpdated } = useGoogleSheets();
-  if (loading) return <div>Loading...</div>;
+  const effectiveData = sheets || data;
+  if (!sheets && loading) return <div>Loading...</div>;
 
-  const kpiRawRows = data['KPIs']?.elements || [];
-  const actualVsTargetRawRows = data['ActualVsTarget']?.elements || [];
+  const kpiRawRows = effectiveData['KPIs']?.elements || [];
+  const actualVsTargetRawRows = effectiveData['ActualVsTarget']?.elements || [];
 
   const canonicalMetric = (value) =>
     String(value || '')
@@ -612,9 +614,14 @@ function ChartCard({ title, children, style, className = '' }) {
   );
 }
 
-function ActualVsTargetCard({ selectedMonth, selectedQuarter, selectedYear, periodMode }) {
+function ActualVsTargetCard({ selectedMonth, selectedQuarter, selectedYear, periodMode, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
-  const rawRows = data['ActualVsTarget']?.elements || [];
+  const effectiveData = sheets || data;
+  const rawRows = effectiveData['ActualVsTarget']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading data...</div>;
+  }
 
   if (loading) {
     return <div className="card-message">Loading data...</div>;
@@ -702,7 +709,7 @@ function ActualVsTargetCard({ selectedMonth, selectedQuarter, selectedYear, peri
           <span className="legend-item"><span className="legend-dot target" />Target</span>
         </div>
         <div
-          className="mini-vertical-chart monthly"
+          className="mini-vertical-chart monthly larger"
           style={{
             '--mini-track-max': dynamicTrackMaxWidth,
             '--mini-track-width': `${dynamicTrackWidth}%`,
@@ -713,11 +720,13 @@ function ActualVsTargetCard({ selectedMonth, selectedQuarter, selectedYear, peri
             const actualHeight = (row.actual / maxValue) * 100;
             const targetHeight = (row.target / maxValue) * 100;
             const actualClass = row.actual >= row.target ? 'actual-good' : 'actual-bad';
-
+            const percent = row.target !== 0 ? (row.actual / row.target) * 100 : 0;
             return (
-              <div className="mini-vertical-col monthly" key={`${row.year || 'NA'}-${row.month}`}>
+              <div className="mini-vertical-col monthly" key={`${row.year || 'NA'}-${row.month}`}>  
                 <div className="mini-vertical-pair">
-                  <div className="mini-vertical-track monthly">
+                  <div className="mini-vertical-track monthly" style={{ position: 'relative' }}>
+                    {/* Persentase di atas bar actual */}
+                    <span className={`mini-bar-percent-label-above${percent >= 100 ? ' good' : ' bad'}`}>{percent.toFixed(1)}%</span>
                     <div className={`mini-vertical-fill ${actualClass}`} style={{ height: `${actualHeight}%` }} />
                   </div>
                   <div className="mini-vertical-track monthly">
@@ -756,9 +765,14 @@ function ActualVsTargetCard({ selectedMonth, selectedQuarter, selectedYear, peri
   );
 }
 
-function RevenueByProductCard({ selectedMonth, selectedQuarter, selectedYear, periodMode }) {
+function RevenueByProductCard({ selectedMonth, selectedQuarter, selectedYear, periodMode, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
-  const rawRows = data['SalesByProduct']?.elements || [];
+  const effectiveData = sheets || data;
+  const rawRows = effectiveData['SalesByProduct']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading data...</div>;
+  }
 
   const getProductColor = (productName) => {
     const normalized = String(productName || '').trim().toLowerCase();
@@ -889,9 +903,14 @@ function RevenueByProductCard({ selectedMonth, selectedQuarter, selectedYear, pe
   );
 }
 
-function RevenueByChannelCard({ selectedMonth, selectedQuarter, selectedYear, periodMode }) {
+function RevenueByChannelCard({ selectedMonth, selectedQuarter, selectedYear, periodMode, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
-  const rawRows = data['SalesByChannel']?.elements || [];
+  const effectiveData = sheets || data;
+  const rawRows = effectiveData['SalesByChannel']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading data...</div>;
+  }
   const pastelPalette = ['#0B4F94', '#1264B3', '#1F78C8', '#2A86D6', '#3A94E2', '#4BA3EE'];
 
   if (loading) {
@@ -972,9 +991,14 @@ function RevenueByChannelCard({ selectedMonth, selectedQuarter, selectedYear, pe
   );
 }
 
-function RevenueByRegionCard({ selectedMonth, selectedQuarter, selectedYear, periodMode }) {
+function RevenueByRegionCard({ selectedMonth, selectedQuarter, selectedYear, periodMode, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
-  const rawRows = data['SalesByRegion']?.elements || [];
+  const effectiveData = sheets || data;
+  const rawRows = effectiveData['SalesByRegion']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading data...</div>;
+  }
 
   if (loading) {
     return <div className="card-message">Loading data...</div>;
@@ -1110,10 +1134,15 @@ function RevenueByRegionCard({ selectedMonth, selectedQuarter, selectedYear, per
   );
 }
 
-function RevenueGrowthCard({ selectedMonth, selectedQuarter, selectedYear, periodMode }) {
+function RevenueGrowthCard({ selectedMonth, selectedQuarter, selectedYear, periodMode, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
+  const effectiveData = sheets || data;
   const [growthView, setGrowthView] = React.useState('mom');
-  const rawRows = data['ActualVsTarget']?.elements || [];
+  const rawRows = effectiveData['ActualVsTarget']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading data...</div>;
+  }
 
   if (loading) {
     return <div className="card-message">Loading data...</div>;
@@ -1285,9 +1314,14 @@ function RevenueGrowthCard({ selectedMonth, selectedQuarter, selectedYear, perio
   );
 }
 
-function ReceivableDaysCard({ selectedMonth, selectedQuarter, selectedYear, periodMode }) {
+function ReceivableDaysCard({ selectedMonth, selectedQuarter, selectedYear, periodMode, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
-  const rawRows = data['ReceivableDays']?.elements || [];
+  const effectiveData = sheets || data;
+  const rawRows = effectiveData['ReceivableDays']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading data...</div>;
+  }
 
   if (loading) {
     return <div className="card-message">Loading data...</div>;
@@ -1430,9 +1464,14 @@ function ReceivableDaysCard({ selectedMonth, selectedQuarter, selectedYear, peri
   );
 }
 
-function InventoryDaysCard({ selectedMonth, selectedQuarter, selectedYear, periodMode }) {
+function InventoryDaysCard({ selectedMonth, selectedQuarter, selectedYear, periodMode, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
-  const rawRows = data['InventoryDays']?.elements || [];
+  const effectiveData = sheets || data;
+  const rawRows = effectiveData['InventoryDays']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading data...</div>;
+  }
 
   if (loading) {
     return <div className="card-message">Loading data...</div>;
@@ -1575,9 +1614,14 @@ function InventoryDaysCard({ selectedMonth, selectedQuarter, selectedYear, perio
   );
 }
 
-function YearOnYearKpiCard() {
+function YearOnYearKpiCard({ dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
-  const kpiRows = data['KPIs']?.elements || [];
+  const effectiveData = sheets || data;
+  const kpiRows = effectiveData['KPIs']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading YoY KPI...</div>;
+  }
 
   if (loading) {
     return <div className="card-message">Loading YoY KPI...</div>;
@@ -1777,9 +1821,14 @@ function YearOnYearKpiCard() {
   );
 }
 
-function AnnualReportCard({ selectedYear }) {
+function AnnualReportCard({ selectedYear, dashboardData }) {
+  const sheets = dashboardData;
   const { data, loading } = useGoogleSheets();
-  const actualVsTargetRows = data['ActualVsTarget']?.elements || [];
+  const effectiveData = sheets || data;
+  const actualVsTargetRows = effectiveData['ActualVsTarget']?.elements || [];
+  if (!sheets && loading) {
+    return <div className="card-message">Loading annual report...</div>;
+  }
 
   if (loading) {
     return <div className="card-message">Loading annual report...</div>;
@@ -1877,8 +1926,73 @@ function AnnualReportCard({ selectedYear }) {
   );
 }
 
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+
 export default function DashboardLayout() {
+  const [uploadedData, setUploadedData] = React.useState(null);
   const { data, syncKpiNow, isSyncing, lastUpdated, validationIssues } = useGoogleSheets();
+  // Make sure data is initialized before getDashboardData uses it
+  // (already declared above, remove duplicate)
+  // Helper to get dashboard data source: uploadedData if present, else Google Sheets
+  const getDashboardData = React.useCallback(() => {
+    if (uploadedData && typeof uploadedData === 'object' && Object.keys(uploadedData).length > 0) {
+      // Try to match Google Sheets tab names to uploaded Excel sheet names (case-insensitive)
+      const normalized = {};
+      Object.entries(uploadedData).forEach(([sheet, rows]) => {
+        if (!Array.isArray(rows)) return;
+        // Normalize sheet name to match expected tab names
+        let key = sheet.trim();
+        if (/^kpi/i.test(key)) key = 'KPIs';
+        else if (/actual/i.test(key)) key = 'ActualVsTarget';
+        else if (/region/i.test(key)) key = 'SalesByRegion';
+        else if (/channel/i.test(key)) key = 'SalesByChannel';
+        else if (/growth/i.test(key)) key = 'SalesGrowth';
+        else if (/product/i.test(key)) key = 'SalesByProduct';
+        else if (/receivable/i.test(key)) key = 'ReceivableDays';
+        else if (/inventory/i.test(key)) key = 'InventoryDays';
+        else if (/brand/i.test(key)) key = 'Branding';
+        normalized[key] = { elements: rows };
+      });
+      return normalized;
+    }
+    return data;
+  }, [uploadedData, data]);
+  function handleFileUpload(e) {
+    const files = e.target.files;
+    const file = files && files[0];
+    if (!file) return;
+    const confirmMsg = 'Pastikan file kamu sudah benar (format dan isi sesuai template).\nLanjutkan upload?';
+    if (!window.confirm(confirmMsg)) {
+      e.target.value = '';
+      return;
+    }
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'csv') {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const text = evt.target.result;
+        const parsed = Papa.parse(text, { header: true });
+        setUploadedData({ CSV: parsed.data });
+      };
+      reader.readAsText(file);
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheets = {};
+        workbook.SheetNames.forEach((sheetName) => {
+          const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+          sheets[sheetName] = sheet;
+        });
+        setUploadedData(sheets);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      alert('Format file belum didukung. Silakan upload file CSV atau Excel (.xlsx).');
+    }
+  }
   const [selectedMonth, setSelectedMonth] = React.useState('JUN');
   const [selectedQuarter, setSelectedQuarter] = React.useState('Q2');
   const [selectedYear, setSelectedYear] = React.useState(String(new Date().getFullYear()));
@@ -1913,11 +2027,12 @@ export default function DashboardLayout() {
     : '-';
 
   const yearOptions = React.useMemo(() => {
+    const dashboardData = getDashboardData();
     const years = new Set([String(selectedYear)]);
     const sourceTabs = ['ActualVsTarget', 'KPIs', 'SalesByRegion', 'SalesByChannel', 'SalesGrowth', 'SalesByProduct'];
 
     sourceTabs.forEach((tabName) => {
-      const rows = data?.[tabName]?.elements || [];
+      const rows = dashboardData?.[tabName]?.elements || [];
       rows.forEach((row) => {
         const yearValue = String(getRowValue(row, ['Year', 'YEAR', 'Tahun', 'year']) || '').trim();
         if (/^\d{4}$/.test(yearValue)) {
@@ -1931,7 +2046,7 @@ export default function DashboardLayout() {
     }
 
     return [...years].sort((a, b) => Number(a) - Number(b));
-  }, [data, selectedYear]);
+  }, [getDashboardData, selectedYear]);
 
   const periodContextText = periodMode === 'yearly'
     ? `Full Year ${selectedYear}`
@@ -1946,7 +2061,8 @@ export default function DashboardLayout() {
     ? validationIssues.map((item) => item?.message).filter(Boolean).join(' | ')
     : 'Semua tab utama valid.';
 
-  const brandingRows = data?.Branding?.elements || [];
+  const dashboardData = getDashboardData();
+  const brandingRows = dashboardData?.Branding?.elements || [];
   const brandingKeys = [
     'Organization',
     'ORGANIZATION',
@@ -1985,9 +2101,11 @@ export default function DashboardLayout() {
     return 'Sport & Wellness';
   })();
 
+  // Pass dashboardData to all panels as prop (or override useGoogleSheets in each panel if needed)
   return (
     <div className="dashboard-root">
       <div className="dashboard-header">
+        {/* Tombol upload & download dipindah ke bawah Last Sync */}
         <div className="dashboard-title-wrap">
           <span>{`${organizationTitle} | ${periodMode === 'yearly' ? 'Annual Report' : periodMode === 'quarterly' ? 'Quarterly Report' : 'YTD Report'}`}</span>
           <span className="dashboard-period-context">{periodContextText}</span>
@@ -2058,12 +2176,47 @@ export default function DashboardLayout() {
           </span>
           <span className="sync-kpi-last">Last sync: {lastSyncText}</span>
           {syncStatus && <span className="sync-kpi-status">{syncStatus}</span>}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginTop: 8, gap: 4 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="dashboard-upload-btn"
+                onClick={() => {
+                  const input = document.getElementById('dashboard-file-input');
+                  if (input) input.click();
+                }}
+              >
+                Upload Data
+              </button>
+              <input
+                id="dashboard-file-input"
+                type="file"
+                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+              <a
+                href="/Dashboard_template.xlsx"
+                download="Dashboard_template.xlsx"
+                className="dashboard-download-btn"
+                style={{ textDecoration: 'none' }}
+              >
+                <button type="button">Download Template</button>
+              </a>
+            </div>
+          </div>
         </div>
       </div>
       <div className="dashboard-content">
         {/* KPI Column */}
         <div className="dashboard-side-panel" style={{gridRow:'1 / span 7'}}>
-          <KPIPanel selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} />
+          <KPIPanel
+            selectedMonth={selectedMonth}
+            selectedQuarter={selectedQuarter}
+            selectedYear={selectedYear}
+            periodMode={periodMode}
+            dashboardData={dashboardData}
+          />
         </div>
         {/* Chart Grid */}
         <ChartCard
@@ -2076,23 +2229,23 @@ export default function DashboardLayout() {
           className="chart-card-3d"
           style={{gridColumn:'2 / span 3',gridRow:'1'}}
         >
-          <ActualVsTargetCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} />
+          <ActualVsTargetCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard
           title="Yearly Achievement"
           className="yearly-achievement-card"
           style={{gridColumn:'2 / span 3',gridRow: periodMode === 'yearly' ? '3' : '2',minHeight:'220px'}}
         >
-          <YearOnYearKpiCard />
+          <YearOnYearKpiCard dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard title="Sales by Region" style={{gridColumn:'2 / span 2',gridRow: periodMode === 'yearly' ? '4' : '3',minHeight:'360px'}}>
-          <RevenueByRegionCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} />
+          <RevenueByRegionCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard title="Revenue by Channel" style={{gridColumn:'4',gridRow: periodMode === 'yearly' ? '4' : '3',minHeight:'300px'}}>
-          <RevenueByChannelCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} />
+          <RevenueByChannelCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard title="Revenue Growth" style={{gridColumn:'2 / span 3',gridRow: periodMode === 'yearly' ? '5' : '4',minHeight:'260px'}}>
-          <RevenueGrowthCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} />
+          <RevenueGrowthCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard
           title={(
@@ -2103,17 +2256,17 @@ export default function DashboardLayout() {
           )}
           style={{gridColumn:'2 / span 3',gridRow: periodMode === 'yearly' ? '6' : '5',minHeight:'320px'}}
         >
-          <RevenueByProductCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} />
+          <RevenueByProductCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard title="Receivable Days Outstanding" style={{gridColumn:'2',gridRow: periodMode === 'yearly' ? '7' : '6',minHeight:'190px'}}>
-          <ReceivableDaysCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} />
+          <ReceivableDaysCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard title="Inventory Days Outstanding" style={{gridColumn:'3',gridRow: periodMode === 'yearly' ? '7' : '6',minHeight:'190px'}}>
-          <InventoryDaysCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} />
+          <InventoryDaysCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
         {periodMode === 'yearly' && (
           <ChartCard title={`Annual Report ${selectedYear}`} style={{ gridColumn: '2 / span 3', gridRow: '2' }}>
-            <AnnualReportCard selectedYear={selectedYear} />
+            <AnnualReportCard selectedYear={selectedYear} dashboardData={dashboardData} />
           </ChartCard>
         )}
       </div>
