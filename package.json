@@ -1,0 +1,21 @@
+{
+  "name": "dashboard-pnl",
+  "version": "1.0.0",
+  "description": "Aplikasi web berbasis dashboard untuk menampilkan laporan Profit & Loss (P&L) lengkap dengan menu input data dan autentikasi user.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "start:backend": "node backend/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "react-scripts": "^5.0.1",
+    "sqlite3": "^5.1.7"
+  }
+}

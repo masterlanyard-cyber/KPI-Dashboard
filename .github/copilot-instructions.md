@@ -1,0 +1,8 @@
+- [x] Scaffold web dashboard P&L project
+- [ ] Setup backend (Node.js/Express)
+- [ ] Setup frontend (React)
+- [ ] Setup database (SQLite/PostgreSQL)
+- [ ] Implement authentication system
+- [ ] Create data input page
+- [ ] Create P&L report page
+- [ ] Write README and documentation
