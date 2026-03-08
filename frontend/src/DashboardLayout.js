@@ -2143,9 +2143,22 @@ export default function DashboardLayout() {
   return (
     <div className="dashboard-root">
       <div className="dashboard-header">
-        <div className="dashboard-title-wrap">
-          <span>{`${organizationTitle} | ${periodMode === 'yearly' ? 'Annual Report' : periodMode === 'quarterly' ? 'Quarterly Report' : 'YTD Report'}`}</span>
+        <div className="dashboard-title-wrap" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span style={{ fontWeight: 700, fontSize: 24, letterSpacing: 0.5 }}>{organizationTitle}</span>
+          <span style={{ marginLeft: 8 }}>| {periodMode === 'yearly' ? 'Annual Report' : periodMode === 'quarterly' ? 'Quarterly Report' : 'YTD Report'}</span>
           <span className="dashboard-period-context">{periodContextText}</span>
+          <button
+            type="button"
+            className="dashboard-reset-btn"
+            style={{ background: '#fff', color: '#C50F1F', border: '1px solid #C50F1F', fontWeight: 500, padding: '4px 12px', borderRadius: 4, cursor: 'pointer', marginLeft: 12 }}
+            onClick={() => {
+              if (window.confirm('Reset data upload? Data hasil upload akan dihapus dan dashboard kembali ke data Google Sheets.')) {
+                setUploadedData(null);
+              }
+            }}
+          >
+            Reset Data Upload
+          </button>
         </div>
         <div className="filter-bar">
           <span>Mode</span>
