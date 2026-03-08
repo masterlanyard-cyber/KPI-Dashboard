@@ -2097,10 +2097,18 @@ export default function DashboardLayout() {
 
   const headerLikeValue = (text) => /^(organization|org|brand|title|company|name)$/i.test(String(text || '').trim());
 
+  const headerValues = [
+    ...brandingKeys.map((k) => k.toLowerCase()),
+    'logourl', 'logo_url', 'logo', 'logo url', 'brandname'
+  ];
   const organizationTitle = (() => {
     for (const row of brandingRows) {
       const fromNamedColumn = String(getRowValue(row, brandingKeys) || '').trim();
-      if (fromNamedColumn && !headerLikeValue(fromNamedColumn)) {
+      if (
+        fromNamedColumn &&
+        !headerLikeValue(fromNamedColumn) &&
+        !headerValues.includes(fromNamedColumn.toLowerCase())
+      ) {
         return fromNamedColumn;
       }
     }
@@ -2108,7 +2116,11 @@ export default function DashboardLayout() {
       const cellValues = Object.values(row || {})
         .map((value) => String(value || '').trim())
         .filter(Boolean);
-      const fromAnyCell = cellValues.find((value) => !headerLikeValue(value));
+      const fromAnyCell = cellValues.find(
+        (value) =>
+          !headerLikeValue(value) &&
+          !headerValues.includes(value.toLowerCase())
+      );
       if (fromAnyCell) {
         return fromAnyCell;
       }
@@ -2131,12 +2143,6 @@ export default function DashboardLayout() {
   return (
     <div className="dashboard-root">
       <div className="dashboard-header">
-        {logoUrl && (
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-            <img src={logoUrl} alt="Brand Logo" style={{ height: 44, marginRight: 16, objectFit: 'contain', maxWidth: 120 }} />
-          </div>
-        )}
-        {/* Tombol upload & download dipindah ke bawah Last Sync */}
         <div className="dashboard-title-wrap">
           <span>{`${organizationTitle} | ${periodMode === 'yearly' ? 'Annual Report' : periodMode === 'quarterly' ? 'Quarterly Report' : 'YTD Report'}`}</span>
           <span className="dashboard-period-context">{periodContextText}</span>
