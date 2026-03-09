@@ -33,7 +33,7 @@ const REQUIRED_TAB_RULES = {
     minRows: 1,
   },
   SalesByProduct: {
-    requiredAnyOfColumns: [['Product', 'Category', 'Kategori'], ['Value', 'Revenue', 'Sales', 'Amount', 'Actual']],
+    requiredAnyOfColumns: [['Product'], ['Category'], ['Unit', 'Revenue']],
     minRows: 1,
   },
   SalesGrowth: {
@@ -59,7 +59,7 @@ const normalizeKey = (value) =>
 function collectTabColumns(rows) {
   const columnSet = new Set();
   (rows || []).forEach((row) => {
-    Object.keys(row || {}).forEach((key) => columnSet.add(key));
+    Object.keys(row || {}).forEach((key) => columnSet.add(normalizeKey(key)));
   });
   return [...columnSet];
 }
@@ -83,8 +83,7 @@ function validateDashboardDataShape(data) {
 
     if (tabRows.length === 0) return;
 
-    const tabColumns = collectTabColumns(tabRows);
-    const normalizedColumns = new Set(tabColumns.map((col) => normalizeKey(col)));
+    const normalizedColumns = new Set(collectTabColumns(tabRows));
 
     (rule.requiredAnyOfColumns || []).forEach((candidateGroup) => {
       const hasAnyColumn = candidateGroup.some((candidate) => normalizedColumns.has(normalizeKey(candidate)));

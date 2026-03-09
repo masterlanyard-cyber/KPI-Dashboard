@@ -1,6 +1,6 @@
-Product,AboveTarget,BelowTarget,Target
-Product1,5097,0,5000
-Product2,3269,0,3200
-Product3,2450,0,2500
-Product4,1872,0,2000
-Product5,127,0,200
+Year,Month,Category,Product,Revenue
+2026,JAN,Electronics,Product1,5097
+2026,JAN,Electronics,Product2,3269
+2026,JAN,Fashion,Product3,2450
+2026,JAN,Fashion,Product4,1872
+2026,JAN,Food,Product5,127

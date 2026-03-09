@@ -441,14 +441,14 @@ function KPIPanel({ selectedMonth, selectedQuarter, selectedYear, periodMode, da
     if (key === 'revenue') {
       const revenueValue = toNumber(baseRow?.Value);
       let achievementText = '';
-      if (!Number.isNaN(revenueValue) && !Number.isNaN(targetSalesValue) && targetSalesValue !== 0) {
+      if (periodMode === 'yearly' && !Number.isNaN(revenueValue) && !Number.isNaN(targetSalesValue) && targetSalesValue !== 0) {
         const achievement = (revenueValue / targetSalesValue) * 100;
         achievementText = `${achievement.toFixed(1)}% achievement vs target`;
       }
       return {
         ...baseRow,
         Metric: 'Revenue',
-        'Note/Extra': achievementText || '-',
+        'Note/Extra': (periodMode === 'yearly' ? (achievementText || '-') : ''),
       };
     }
 
@@ -704,10 +704,7 @@ function ActualVsTargetCard({ selectedMonth, selectedQuarter, selectedYear, peri
   return (
     <div className="actual-target-wrap">
       <div className="actual-target-mini-chart">
-        <div className="mini-vertical-legend">
-          <span className="legend-item"><span className="legend-dot actual" />Actual</span>
-          <span className="legend-item"><span className="legend-dot target" />Target</span>
-        </div>
+        {/* Legend dots removed as requested */}
         <div
           className="mini-vertical-chart monthly larger"
           style={{
@@ -800,6 +797,7 @@ function RevenueByProductCard({ selectedMonth, selectedQuarter, selectedYear, pe
   const mappedRows = rawRows.map((row) => {
     const product = String(getRowValue(row, ['Product', 'PRODUCT', 'Category', 'CATEGORY', 'Kategori']) || '-').trim();
     const explicitValue = parseNumber(getRowValue(row, ['Value', 'VALUE', 'Revenue', 'Sales', 'Amount', 'Actual']));
+    const unitValue = parseNumber(getRowValue(row, ['Unit', 'UNIT']));
     const aboveTarget = parseNumber(getRowValue(row, ['AboveTarget', 'ABOVETARGET', 'Above Target']));
     const belowTarget = parseNumber(getRowValue(row, ['BelowTarget', 'BELOWTARGET', 'Below Target']));
     const month = normalizeText(getRowValue(row, ['Month', 'MONTH', 'Bulan', 'month']));
@@ -809,7 +807,7 @@ function RevenueByProductCard({ selectedMonth, selectedQuarter, selectedYear, pe
       ? explicitValue
       : ((Number.isNaN(aboveTarget) ? 0 : aboveTarget) + (Number.isNaN(belowTarget) ? 0 : belowTarget));
 
-    return { product, value, month, year };
+    return { product, value, unitValue, month, year };
   }).filter((row) => row.product && !Number.isNaN(row.value));
 
   const hasMonthData = mappedRows.some((row) => row.month);
@@ -854,6 +852,10 @@ function RevenueByProductCard({ selectedMonth, selectedQuarter, selectedYear, pe
     ...row,
     percent: (row.value / totalAllProductsValue) * 100,
     color: getProductColor(row.product),
+    unitValue: mappedRows.find(r =>
+      r.product === row.product &&
+      r.year === String(selectedYear)
+    )?.unitValue ?? 0,
   }));
 
   const top5Value = productRows.reduce((sum, row) => sum + row.value, 0);
@@ -883,11 +885,12 @@ function RevenueByProductCard({ selectedMonth, selectedQuarter, selectedYear, pe
 
       <div className="product-full-legend">
         {productWithPercent.map((row) => (
-          <div key={`product-legend-${row.product}`} className="product-full-legend-row">
-            <span className="channel-dot" style={{ backgroundColor: row.color }} />
-            <span className="product-full-legend-name">{row.product}</span>
-            <span className="channel-percent">{row.percent.toFixed(1)}%</span>
-            <span className="channel-amount">{row.value.toLocaleString()}</span>
+          <div key={`product-legend-${row.product}`} className="product-full-legend-row" style={{ display: 'flex', alignItems: 'center' }}>
+            <span className="channel-dot" style={{ backgroundColor: row.color, marginRight: 8 }} />
+            <span className="product-full-legend-name" style={{ marginRight: 'auto' }}>{row.product}</span>
+            <span className="channel-percent" style={{ marginRight: 8 }}>{row.percent.toFixed(1)}%</span>
+            <span className="channel-amount" style={{ marginRight: 8 }}>{row.value?.toLocaleString()}</span>
+            <span className="channel-amount">{row.unitValue?.toLocaleString()}</span>
           </div>
         ))}
         {othersValue > 0 && (
@@ -1842,15 +1845,37 @@ function AnnualReportCard({ selectedYear, dashboardData }) {
   })).filter((row) => !Number.isNaN(row.actual) || !Number.isNaN(row.target));
 
   const hasYearActualTarget = mappedActualTarget.some((row) => row.year);
-  const yearlyActualTarget = hasYearActualTarget
-    ? mappedActualTarget.filter((row) => row.year === String(selectedYear))
-    : mappedActualTarget;
+  // Ambil data per tahun
+  const groupedByYear = mappedActualTarget.reduce((acc, row) => {
+    if (!row.year) return acc;
+    if (!acc[row.year]) acc[row.year] = [];
+    acc[row.year].push(row);
+    return acc;
+  }, {});
 
-  const totalActual = yearlyActualTarget.reduce((sum, row) => sum + (Number.isNaN(row.actual) ? 0 : row.actual), 0);
-  const totalTarget = yearlyActualTarget.reduce((sum, row) => sum + (Number.isNaN(row.target) ? 0 : row.target), 0);
+  const totalActualByYear = {};
+  const totalTargetByYear = {};
+  Object.entries(groupedByYear).forEach(([year, rows]) => {
+    totalActualByYear[year] = rows.reduce((sum, row) => sum + (Number.isNaN(row.actual) ? 0 : row.actual), 0);
+    totalTargetByYear[year] = rows.reduce((sum, row) => sum + (Number.isNaN(row.target) ? 0 : row.target), 0);
+  });
+
+  const totalActual = totalActualByYear[selectedYear] || 0;
+  const totalTarget = totalTargetByYear[selectedYear] || 0;
   const annualAchievement = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
   const annualVariance = totalActual - totalTarget;
 
+  // Growth terhadap tahun sebelumnya
+  const prevYear = String(Number(selectedYear) - 1);
+  const prevActual = totalActualByYear[prevYear];
+  const avgGrowth = (prevActual && prevActual !== 0)
+    ? ((totalActual - prevActual) / prevActual) * 100
+    : NaN;
+
+  // Untuk best/worst month, tetap gunakan growth bulanan tahun berjalan
+  const yearlyActualTarget = hasYearActualTarget
+    ? mappedActualTarget.filter((row) => row.year === String(selectedYear))
+    : mappedActualTarget;
   const monthlyActualMap = yearlyActualTarget.reduce((acc, row) => {
     const month = normalizeText(row.month);
     const monthIndex = MONTH_OPTIONS.indexOf(month);
@@ -1865,7 +1890,6 @@ function AnnualReportCard({ selectedYear, dashboardData }) {
     };
     return acc;
   }, {});
-
   const sortedMonthlyActual = Object.values(monthlyActualMap).sort((a, b) => a.monthIndex - b.monthIndex);
   const yearlyGrowth = [];
   for (let i = 1; i < sortedMonthlyActual.length; i += 1) {
@@ -1879,11 +1903,6 @@ function AnnualReportCard({ selectedYear, dashboardData }) {
       growth: ((currentActual - prevActual) / prevActual) * 100,
     });
   }
-
-  const avgGrowth = yearlyGrowth.length > 0
-    ? yearlyGrowth.reduce((sum, row) => sum + row.growth, 0) / yearlyGrowth.length
-    : NaN;
-
   const sortedGrowth = [...yearlyGrowth].sort((a, b) => b.growth - a.growth);
   const bestGrowth = sortedGrowth[0];
   const worstGrowth = sortedGrowth[sortedGrowth.length - 1];
@@ -2130,12 +2149,38 @@ export default function DashboardLayout() {
   return (
     <div className="dashboard-root">
       <div className="dashboard-header">
-        <div className="dashboard-title-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
-          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: 0.5, lineHeight: 1 }}>{organizationTitle}</span>
-          <span style={{ fontSize: 13, color: '#6A6A6A', marginTop: 2, marginLeft: 0, lineHeight: 1.2, fontWeight: 500, textAlign: 'left' }}>
-            {periodMode === 'yearly' ? 'Annual Report' : periodMode === 'quarterly' ? 'Quarterly Report' : 'YTD Report'}
-          </span>
-          <span className="dashboard-period-context" style={{ fontSize: 12, color: '#8AA0BE', fontWeight: 400, marginTop: 0, marginLeft: 0, textAlign: 'left' }}>{periodContextText}</span>
+        <div className="dashboard-title-card" style={{
+          background: 'linear-gradient(135deg, #fff, #f6fafd)',
+          borderRadius: 16,
+          boxShadow: '0 8px 32px 0 rgba(15, 108, 189, 0.18), 0 1.5px 8px 0 rgba(31,41,55,0.08)',
+          border: '1.5px solid #D0D7E2',
+          padding: '22px 40px 18px 24px',
+          marginBottom: 28,
+          marginLeft: -32,
+          marginRight: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          minWidth: 320,
+          maxWidth: 540,
+          transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1)',
+          willChange: 'box-shadow, transform',
+          position: 'relative',
+          zIndex: 10
+        }}
+        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 16px 48px 0 rgba(15,108,189,0.22), 0 2px 12px 0 rgba(31,41,55,0.10)'; e.currentTarget.style.transform = 'translateY(-4px) scale(1.012)'; }}
+        onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 8px 32px 0 rgba(15, 108, 189, 0.18), 0 1.5px 8px 0 rgba(31,41,55,0.08)'; e.currentTarget.style.transform = 'none'; }}
+      >
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginBottom: 2 }}>
+            <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: 0.5, lineHeight: 1.1, color: '#222' }}>{organizationTitle}</span>
+            <span style={{ fontSize: 13, color: '#B0B0B0', margin: '0 10px', fontWeight: 400, lineHeight: 1.1 }}>|</span>
+            <span style={{ fontWeight: 700, fontSize: 11.5, letterSpacing: 0.1, lineHeight: 1.1, color: '#888' }}>
+              {periodMode === 'yearly' && `Annual Report ${selectedYear}`}
+              {periodMode === 'quarterly' && `Quarterly Report ${selectedQuarter} ${selectedYear}`}
+              {periodMode === 'ytd' && `YTD Report up to ${selectedMonth} ${selectedYear}`}
+            </span>
+          </div>
+          <span className="dashboard-period-context" style={{ fontSize: 13, color: '#5E6A7D', fontWeight: 500, marginTop: 2, marginLeft: 2, textAlign: 'left', letterSpacing: 0.1 }}>{periodContextText}</span>
         </div>
         <div className="filter-bar">
           <span>Mode</span>
@@ -2265,24 +2310,25 @@ export default function DashboardLayout() {
             </span>
           )}
           className="chart-card-3d"
-          style={{gridColumn:'2 / span 3',gridRow:'1'}}
-        >
+          style={{gridColumn:'2 / span 3',gridRow:'1'}}>
           <ActualVsTargetCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
+        </ChartCard>
+        <ChartCard title={`Annual Report ${selectedYear}`} style={{ gridColumn: '2 / span 3', gridRow: '2' }}>
+          <AnnualReportCard selectedYear={selectedYear} dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard
           title="Yearly Achievement"
           className="yearly-achievement-card"
-          style={{gridColumn:'2 / span 3',gridRow: periodMode === 'yearly' ? '3' : '2',minHeight:'220px'}}
-        >
+          style={{gridColumn:'2 / span 3',gridRow:'3',minHeight:'220px'}}>
           <YearOnYearKpiCard dashboardData={dashboardData} />
         </ChartCard>
-        <ChartCard title="Sales by Region" style={{gridColumn:'2 / span 2',gridRow: periodMode === 'yearly' ? '4' : '3',minHeight:'360px'}}>
+        <ChartCard title="Sales by Region" style={{gridColumn:'2 / span 2',gridRow: '4',minHeight:'360px'}}>
           <RevenueByRegionCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
-        <ChartCard title="Revenue by Channel" style={{gridColumn:'4',gridRow: periodMode === 'yearly' ? '4' : '3',minHeight:'300px'}}>
+        <ChartCard title="Revenue by Channel" style={{gridColumn:'4',gridRow: '4',minHeight:'300px'}}>
           <RevenueByChannelCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
-        <ChartCard title="Revenue Growth" style={{gridColumn:'2 / span 3',gridRow: periodMode === 'yearly' ? '5' : '4',minHeight:'260px'}}>
+        <ChartCard title="Revenue Growth" style={{gridColumn:'2 / span 3',gridRow: '5',minHeight:'260px'}}>
           <RevenueGrowthCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
         <ChartCard
@@ -2292,21 +2338,19 @@ export default function DashboardLayout() {
               <span className="chart-title-subtle">Top 5</span>
             </>
           )}
-          style={{gridColumn:'2 / span 3',gridRow: periodMode === 'yearly' ? '6' : '5',minHeight:'320px'}}
+          style={{gridColumn:'2 / span 3',gridRow: '6',minHeight:'320px'}}
         >
           <RevenueByProductCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
-        <ChartCard title="Receivable Days Outstanding" style={{gridColumn:'2',gridRow: periodMode === 'yearly' ? '7' : '6',minHeight:'190px'}}>
+        <ChartCard title="Receivable Days Outstanding" style={{gridColumn:'2',gridRow: '7',minHeight:'190px'}}>
           <ReceivableDaysCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
-        <ChartCard title="Inventory Days Outstanding" style={{gridColumn:'3',gridRow: periodMode === 'yearly' ? '7' : '6',minHeight:'190px'}}>
+        <ChartCard title="Inventory Days Outstanding" style={{gridColumn:'3',gridRow: '7',minHeight:'190px'}}>
           <InventoryDaysCard selectedMonth={selectedMonth} selectedQuarter={selectedQuarter} selectedYear={selectedYear} periodMode={periodMode} dashboardData={dashboardData} />
         </ChartCard>
-        {periodMode === 'yearly' && (
-          <ChartCard title={`Annual Report ${selectedYear}`} style={{ gridColumn: '2 / span 3', gridRow: '2' }}>
-            <AnnualReportCard selectedYear={selectedYear} dashboardData={dashboardData} />
-          </ChartCard>
-        )}
+        <ChartCard title={`Annual Report ${selectedYear}`} style={{ gridColumn: '2 / span 3', gridRow: '2' }}>
+          <AnnualReportCard selectedYear={selectedYear} dashboardData={dashboardData} />
+        </ChartCard>
       </div>
     </div>
   );
