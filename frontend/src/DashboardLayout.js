@@ -542,65 +542,61 @@ function KPIPanel({ selectedMonth, selectedQuarter, selectedYear, periodMode, da
           Ada tab yang gagal diupdate, tapi data utama tetap ditampilkan.
         </div>
       )}
-      {reorderedRows.map((row, i) => (
-        <div className="kpi-panel" key={i}>
-          {(() => {
-            const metricText = String(row?.Metric || '').toLowerCase();
-            const rawValue = row.Value ?? '-';
-            let displayValue = rawValue;
-            const rawNumeric = toNumber(rawValue);
+      {reorderedRows.map((row, i) => {
+        const metricText = String(row?.Metric || '').toLowerCase();
+        const rawValue = row.Value ?? '-';
+        let displayValue = rawValue;
+        const rawNumeric = toNumber(rawValue);
 
-            if (!Number.isNaN(rawNumeric)) {
-              displayValue = formatKpiNumber(rawNumeric);
+        if (!Number.isNaN(rawNumeric)) {
+          displayValue = formatKpiNumber(rawNumeric);
+        }
+
+        if (metricText.includes('target') && metricText.includes('achievement')) {
+          const valueText = String(rawValue || '').trim();
+          if (!valueText.includes('%')) {
+            const numeric = toNumber(valueText);
+            if (!Number.isNaN(numeric)) {
+              const percentValue = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+              displayValue = `${percentValue.toFixed(1)}%`;
             }
+          }
+        }
 
-            if (metricText.includes('target') && metricText.includes('achievement')) {
-              const valueText = String(rawValue || '').trim();
-              if (!valueText.includes('%')) {
-                const numeric = toNumber(valueText);
-                if (!Number.isNaN(numeric)) {
-                  const percentValue = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
-                  displayValue = `${percentValue.toFixed(1)}%`;
-                }
-              }
-            }
+        const displayNumeric = !Number.isNaN(rawNumeric) ? rawNumeric : toNumber(displayValue);
+        const valueClass = `kpi-value${!Number.isNaN(displayNumeric) && displayNumeric < 0 ? ' negative' : ''}`;
 
-            const displayNumeric = !Number.isNaN(rawNumeric) ? rawNumeric : toNumber(displayValue);
-            const valueClass = `kpi-value${!Number.isNaN(displayNumeric) && displayNumeric < 0 ? ' negative' : ''}`;
+        // Tambahkan persentase pencapaian di bawah revenue
+        const isRevenue = metricText === 'revenue';
+        let achievementPercent = null;
+        if (isRevenue) {
+          // Cari target sales value dari context di atas
+          const revenueValue = toNumber(row.Value);
+          let targetValue = NaN;
+          if (typeof targetSalesValue !== 'undefined') {
+            targetValue = targetSalesValue;
+          }
+          if (!Number.isNaN(revenueValue) && !Number.isNaN(targetValue) && targetValue !== 0) {
+            const percent = (revenueValue / targetValue) * 100;
+            achievementPercent = `${percent.toFixed(1)}% dari target`;
+          }
+        }
 
-            return (
-              <>
-          <div className="kpi-label">{row.Metric ?? '-'}</div>
-          <div className={valueClass}>{displayValue}</div>
-          {row['Note/Extra'] !== undefined && row['Note/Extra'] !== null && (() => {
-            const noteText = String(row['Note/Extra']);
-            const isRevenue = String(row?.Metric || '').toLowerCase() === 'revenue';
-            const baseClass = "kpi-extra" + (noteText.includes('-') ? ' red' : '') + (isRevenue ? ' revenue-extra' : '');
-
-            if (!isRevenue) {
-              return <div className={baseClass}>{renderWithBoldPercent(noteText)}</div>;
-            }
-
-            const percentMatch = noteText.match(/-?\d+(?:[.,]\d+)?%/);
-            if (!percentMatch) {
-              return <div className={baseClass}>{renderWithBoldPercent(noteText)}</div>;
-            }
-
-            const percentValue = percentMatch[0];
-            const labelText = noteText.replace(percentValue, '').trim() || 'achievement vs target';
-
-            return (
-              <div className={baseClass}>
-                <div className="revenue-extra-percent">{percentValue}</div>
-                <div className="revenue-extra-label">{labelText}</div>
+        return (
+          <div className="kpi-panel" key={i}>
+            <div className="kpi-label">{row.Metric ?? '-'}</div>
+            <div className={valueClass}>{displayValue}</div>
+            {isRevenue && achievementPercent && (
+              <div className="kpi-extra revenue-achievement" style={{ color: '#0F6CBD', fontWeight: 500, fontSize: 13, marginTop: 2 }}>
+                <span style={{ fontWeight: 'bold' }}>{achievementPercent.split(' ')[0]}</span>{' '}{achievementPercent.replace('dari target', 'from target').replace(achievementPercent.split(' ')[0], '')}
               </div>
-            );
-          })()}
-              </>
-            );
-          })()}
-        </div>
-      ))}
+            )}
+            {row['Note/Extra'] !== undefined && row['Note/Extra'] !== null && !isRevenue && (
+              <div className="kpi-extra">{renderWithBoldPercent(String(row['Note/Extra']))}</div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
