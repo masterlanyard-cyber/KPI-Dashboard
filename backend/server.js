@@ -1,6 +1,32 @@
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const { initDb, run, all } = require('./db');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dashboard-pnl-secret-key-change-in-production';
+const SALT_ROUNDS = 10;
+
+if (!process.env.JWT_SECRET) {
+  console.warn('[PERINGATAN] JWT_SECRET tidak diatur di environment. Gunakan nilai default yang tidak aman untuk produksi!');
+}
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Terlalu banyak percobaan. Silakan coba lagi setelah 15 menit.' },
+});
+
+const apiRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Terlalu banyak permintaan. Silakan coba lagi setelah 1 menit.' },
+});
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -386,6 +412,167 @@ app.post('/api/kpi/sync', async (req, res) => {
       error: 'Sinkronisasi KPI gagal.',
       detail: error?.message || 'unknown error',
     });
+  }
+});
+
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'Token tidak ditemukan. Silakan login.' });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch {
+    return res.status(403).json({ error: 'Token tidak valid atau sudah expired.' });
+  }
+}
+
+app.post('/api/auth/register', authRateLimiter, async (req, res) => {
+  try {
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '').trim();
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username dan password wajib diisi.' });
+    }
+    if (username.length < 3) {
+      return res.status(400).json({ error: 'Username minimal 3 karakter.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password minimal 6 karakter.' });
+    }
+
+    const existing = await all('SELECT id FROM users WHERE username = ?', [username]);
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Username sudah terdaftar.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    await run('INSERT INTO users (username, password_hash) VALUES (?, ?)', [username, passwordHash]);
+
+    return res.status(201).json({ ok: true, message: 'Registrasi berhasil.' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Gagal registrasi.', detail: error?.message || 'unknown error' });
+  }
+});
+
+app.post('/api/auth/login', authRateLimiter, async (req, res) => {
+  try {
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '').trim();
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username dan password wajib diisi.' });
+    }
+
+    const rows = await all('SELECT id, username, password_hash FROM users WHERE username = ?', [username]);
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Username atau password salah.' });
+    }
+
+    const user = rows[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) {
+      return res.status(401).json({ error: 'Username atau password salah.' });
+    }
+
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '24h' });
+    return res.json({ ok: true, token, username: user.username });
+  } catch (error) {
+    return res.status(500).json({ error: 'Gagal login.', detail: error?.message || 'unknown error' });
+  }
+});
+
+app.get('/api/pnl', apiRateLimiter, authMiddleware, async (_req, res) => {
+  try {
+    const rows = await all(`
+      SELECT id, month, year, revenue, cogs, gross_profit, opex, net_profit, other_income, notes, created_by, created_at, updated_at
+      FROM pnl_entries
+      ORDER BY CAST(year AS INTEGER) DESC,
+        CASE month
+          WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 WHEN 'APR' THEN 4
+          WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6 WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8
+          WHEN 'SEP' THEN 9 WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
+          ELSE 99
+        END DESC
+    `);
+    return res.json({ ok: true, data: rows });
+  } catch (error) {
+    return res.status(500).json({ error: 'Gagal mengambil data P&L.', detail: error?.message || 'unknown error' });
+  }
+});
+
+app.post('/api/pnl', apiRateLimiter, authMiddleware, async (req, res) => {
+  try {
+    const { month, year, revenue, cogs, gross_profit, opex, net_profit, other_income, notes } = req.body || {};
+
+    if (!month || !year) {
+      return res.status(400).json({ error: 'Bulan dan tahun wajib diisi.' });
+    }
+
+    const VALID_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const normalizedMonth = String(month).trim().toUpperCase();
+    if (!VALID_MONTHS.includes(normalizedMonth)) {
+      return res.status(400).json({ error: 'Format bulan tidak valid. Gunakan JAN-DEC.' });
+    }
+
+    const normalizedYear = String(year).trim();
+    if (!/^\d{4}$/.test(normalizedYear)) {
+      return res.status(400).json({ error: 'Format tahun tidak valid. Gunakan 4 digit angka.' });
+    }
+
+    const toNum = (val) => {
+      const n = parseFloat(String(val ?? '').replace(/,/g, ''));
+      return Number.isNaN(n) ? null : n;
+    };
+
+    await run(
+      `INSERT INTO pnl_entries (month, year, revenue, cogs, gross_profit, opex, net_profit, other_income, notes, created_by, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(month, year)
+       DO UPDATE SET
+         revenue = excluded.revenue,
+         cogs = excluded.cogs,
+         gross_profit = excluded.gross_profit,
+         opex = excluded.opex,
+         net_profit = excluded.net_profit,
+         other_income = excluded.other_income,
+         notes = excluded.notes,
+         created_by = excluded.created_by,
+         updated_at = CURRENT_TIMESTAMP`,
+      [
+        normalizedMonth,
+        normalizedYear,
+        toNum(revenue),
+        toNum(cogs),
+        toNum(gross_profit),
+        toNum(opex),
+        toNum(net_profit),
+        toNum(other_income),
+        String(notes || '').trim(),
+        req.user.username,
+      ]
+    );
+
+    return res.json({ ok: true, message: 'Data P&L berhasil disimpan.' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Gagal menyimpan data P&L.', detail: error?.message || 'unknown error' });
+  }
+});
+
+app.delete('/api/pnl/:id', apiRateLimiter, authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id || Number.isNaN(id)) {
+      return res.status(400).json({ error: 'ID tidak valid.' });
+    }
+    await run('DELETE FROM pnl_entries WHERE id = ?', [id]);
+    return res.json({ ok: true, message: 'Data P&L berhasil dihapus.' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Gagal menghapus data P&L.', detail: error?.message || 'unknown error' });
   }
 });
 
