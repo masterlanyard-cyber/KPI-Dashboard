@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "papaparse": "^5.5.3",
+    "pdfjs-dist": "^4.10.38",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-scripts": "^5.0.0",
@@ -11,6 +12,9 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
+    "copy:worker": "node -e \"const fs=require('fs'); const src='node_modules/pdfjs-dist/build/pdf.worker.min.mjs'; const dest='public/pdf.worker.min.mjs'; if(!fs.existsSync(dest)||fs.statSync(src).mtimeMs>fs.statSync(dest).mtimeMs){fs.copyFileSync(src,dest);console.log('Copied pdf.worker.min.mjs');}\"",
+    "prestart": "npm run copy:worker",
+    "prebuild": "npm run copy:worker",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
