@@ -2021,8 +2021,86 @@ export default function DashboardLayout() {
         setUploadedData(sheets);
       };
       reader.readAsArrayBuffer(file);
+    } else if (ext === 'pdf') {
+      const reader = new FileReader();
+      reader.onload = async function(evt) {
+        try {
+          const pdfjsLib = await import('pdfjs-dist');
+          // Use the local worker file (copied to public/ via npm run copy:worker)
+          // to avoid depending on external CDN infrastructure
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            process.env.PUBLIC_URL + '/pdf.worker.min.mjs';
+          const arrayBuffer = evt.target.result;
+          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+          const pdf = await loadingTask.promise;
+
+          // Collect all text items with their positions across all pages
+          const allItems = [];
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1 });
+            const textContent = await page.getTextContent();
+            const pageYOffset = (pageNum - 1) * viewport.height;
+            textContent.items.forEach((item) => {
+              if (item.str && item.str.trim()) {
+                allItems.push({
+                  str: item.str.trim(),
+                  x: Math.round(item.transform[4]),
+                  // PDF Y-axis is bottom-up; invert and offset per page
+                  y: Math.round(pageYOffset + (viewport.height - item.transform[5])),
+                });
+              }
+            });
+          }
+
+          if (allItems.length === 0) {
+            alert('Tidak ada teks yang ditemukan dalam file PDF. Pastikan PDF mengandung teks (bukan gambar scan).');
+            return;
+          }
+
+          // Tolerance in PDF points (~1/72 inch) for grouping text items into the same row.
+          // 5pt ≈ 1.8mm which accommodates minor vertical offsets between glyphs on the same line.
+          const ROW_Y_TOLERANCE = 5;
+          const rowGroups = [];
+          allItems.forEach((item) => {
+            const existing = rowGroups.find((r) => Math.abs(r.y - item.y) <= ROW_Y_TOLERANCE);
+            if (existing) {
+              existing.items.push(item);
+            } else {
+              rowGroups.push({ y: item.y, items: [item] });
+            }
+          });
+
+          // Sort rows top-to-bottom, and items in each row left-to-right
+          rowGroups.sort((a, b) => a.y - b.y);
+          rowGroups.forEach((r) => r.items.sort((a, b) => a.x - b.x));
+
+          const tableRows = rowGroups.map((r) => r.items.map((i) => i.str));
+
+          if (tableRows.length < 2) {
+            alert('Tidak cukup baris data ditemukan dalam file PDF. Pastikan PDF memiliki tabel dengan minimal satu baris header dan satu baris data.');
+            return;
+          }
+
+          // Use the first row as headers and remaining rows as data
+          const headers = tableRows[0];
+          const dataRows = tableRows.slice(1);
+          const parsed = dataRows.map((row) => {
+            const obj = {};
+            headers.forEach((header, i) => {
+              obj[header] = row[i] !== undefined ? row[i] : '';
+            });
+            return obj;
+          });
+
+          setUploadedData({ PDF: parsed });
+        } catch (err) {
+          alert('Gagal membaca file PDF: ' + (err.message || String(err)));
+        }
+      };
+      reader.readAsArrayBuffer(file);
     } else {
-      alert('Format file belum didukung. Silakan upload file CSV atau Excel (.xlsx).');
+      alert('Format file belum didukung. Silakan upload file CSV, Excel (.xlsx), atau PDF.');
     }
   }
   const [selectedMonth, setSelectedMonth] = React.useState('JUN');
@@ -2259,7 +2337,7 @@ export default function DashboardLayout() {
               <input
                 id="dashboard-file-input"
                 type="file"
-                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, .pdf, application/pdf"
                 style={{ display: 'none' }}
                 onChange={handleFileUpload}
               />
